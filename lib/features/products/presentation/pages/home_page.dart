@@ -3,9 +3,13 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../cart/domain/cart_item.dart';
-import '../bloc/cart_bloc.dart';
-import '../bloc/cart_event.dart';
+import '../../../wishlist/bloc/wishlist_bloc.dart';
+import '../../../wishlist/bloc/wishlist_event.dart';
+import '../../../wishlist/bloc/wishlist_state.dart';
 import '../../data/models/product_model.dart';
+import '../bloc/cart_bloc.dart';
+import '../bloc/cart_state.dart';
+import '../bloc/cart_event.dart';
 import '../bloc/product_bloc.dart';
 import '../bloc/product_event.dart';
 import '../bloc/product_state.dart';
@@ -22,8 +26,6 @@ class _HomePageState extends State<HomePage> {
       TextEditingController();
 
   int _selectedCategoryIndex = 0;
-
-  final Set<int> _wishlistIds = {};
 
   @override
   void dispose() {
@@ -105,7 +107,7 @@ class _HomePageState extends State<HomePage> {
                   CrossAxisAlignment.start,
               children: [
                 Text(
-                  'E-Shop',
+                  'Shoply',
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w800,
@@ -129,14 +131,62 @@ class _HomePageState extends State<HomePage> {
             },
           ),
           const SizedBox(width: 8),
-          _headerButton(
-            Icons.shopping_bag_outlined,
-            () {
-              context.go('/cart');
-            },
-          ),
+          _buildCartHeaderButton(),
         ],
       ),
+    );
+  }
+
+  Widget _buildCartHeaderButton() {
+    return BlocBuilder<CartBloc, CartState>(
+      builder: (context, state) {
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            _headerButton(
+              Icons.shopping_bag_outlined,
+              () {
+                context.go('/cart');
+              },
+            ),
+            if (state.totalItems > 0)
+              Positioned(
+                right: -2,
+                top: -2,
+                child: Container(
+                  constraints: const BoxConstraints(
+                    minWidth: 19,
+                    minHeight: 19,
+                  ),
+                  padding:
+                      const EdgeInsets.symmetric(
+                    horizontal: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFF5C7A),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: const Color(0xFFF8F7FC),
+                      width: 2,
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      state.totalItems > 99
+                          ? '99+'
+                          : '${state.totalItems}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 8,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 
@@ -270,24 +320,36 @@ class _HomePageState extends State<HomePage> {
                         height: 36,
                         child: ElevatedButton(
                           onPressed: () {
-                            context.read<ProductBloc>().add(
-                                  const SelectCategory(null),
+                            setState(() {
+                              _selectedCategoryIndex = 0;
+                            });
+
+                            context
+                                .read<ProductBloc>()
+                                .add(
+                                  const SelectCategory(
+                                    null,
+                                  ),
                                 );
                           },
                           style:
                               ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
+                            backgroundColor:
+                                Colors.white,
                             foregroundColor:
                                 const Color(0xFF6949E8),
                             elevation: 0,
                             padding:
-                                const EdgeInsets.symmetric(
+                                const EdgeInsets
+                                    .symmetric(
                               horizontal: 16,
                             ),
                             shape:
                                 RoundedRectangleBorder(
                               borderRadius:
-                                  BorderRadius.circular(12),
+                                  BorderRadius.circular(
+                                12,
+                              ),
                             ),
                           ),
                           child: const Text(
@@ -467,7 +529,9 @@ class _HomePageState extends State<HomePage> {
             child: Padding(
               padding: EdgeInsets.all(50),
               child: Center(
-                child: Text('No products found'),
+                child: Text(
+                  'No products found',
+                ),
               ),
             ),
           );
@@ -481,42 +545,6 @@ class _HomePageState extends State<HomePage> {
               (context, index) {
                 return ProductCard(
                   product: products[index],
-                  isWishlisted: _wishlistIds.contains(
-                    products[index].id,
-                  ),
-                  onWishlistToggle: () {
-                    setState(() {
-                      final id = products[index].id;
-
-                      if (_wishlistIds.contains(id)) {
-                        _wishlistIds.remove(id);
-                      } else {
-                        _wishlistIds.add(id);
-                      }
-                    });
-
-                    final added =
-                        _wishlistIds.contains(
-                      products[index].id,
-                    );
-
-                    ScaffoldMessenger.of(context)
-                      ..hideCurrentSnackBar()
-                      ..showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            added
-                                ? '${products[index].title} added to wishlist'
-                                : '${products[index].title} removed from wishlist',
-                          ),
-                          behavior:
-                              SnackBarBehavior.floating,
-                          duration: const Duration(
-                            milliseconds: 1200,
-                          ),
-                        ),
-                      );
-                  },
                 );
               },
               childCount: products.length,
@@ -565,7 +593,9 @@ class _HomePageState extends State<HomePage> {
                     const LoadProducts(),
                   );
             },
-            child: const Text('Try again'),
+            child: const Text(
+              'Try again',
+            ),
           ),
         ],
       ),
@@ -590,14 +620,10 @@ class _HomePageState extends State<HomePage> {
 
 class ProductCard extends StatelessWidget {
   final ProductModel product;
-  final bool isWishlisted;
-  final VoidCallback onWishlistToggle;
 
   const ProductCard({
     super.key,
     required this.product,
-    required this.isWishlisted,
-    required this.onWishlistToggle,
   });
 
   @override
@@ -607,280 +633,303 @@ class ProductCard extends StatelessWidget {
             product.discountPercentage /
             100);
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () {
-          context.push(
-            '/products/${product.id}',
-          );
-        },
-        child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Stack(
-                children: [
-                  Container(
-                    width: double.infinity,
-                    color: const Color(0xFFF5F3FA),
-                    child: Image.network(
-                      product.thumbnail,
-                      fit: BoxFit.cover,
-                      errorBuilder:
-                          (context, error, stackTrace) {
-                        return const Center(
-                          child: Icon(
-                            Icons
-                                .image_not_supported_outlined,
-                            color: Colors.grey,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  if (product.discountPercentage > 0)
-                    Positioned(
-                      top: 10,
-                      left: 10,
-                      child: Container(
-                        padding:
-                            const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color:
-                              const Color(0xFFFF5C7A),
-                          borderRadius:
-                              BorderRadius.circular(9),
-                        ),
-                        child: Text(
-                          '${product.discountPercentage.toStringAsFixed(0)}% OFF',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 9,
-                            fontWeight:
-                                FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ),
-                  Positioned(
-                    top: 9,
-                    right: 9,
-                    child: Material(
-                      color: Colors.white,
-                      shape: const CircleBorder(),
-                      child: InkWell(
-                        onTap: onWishlistToggle,
-                        customBorder:
-                            const CircleBorder(),
-                        child: Padding(
-                          padding:
-                              const EdgeInsets.all(8),
-                          child: Icon(
-                            isWishlisted
-                                ? Icons
-                                    .favorite_rounded
-                                : Icons
-                                    .favorite_border_rounded,
-                            size: 17,
-                            color: isWishlisted
-                                ? const Color(
-                                    0xFFFF5C7A,
-                                  )
-                                : const Color(
-                                    0xFF29243D,
-                                  ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                12,
-                10,
-                12,
-                12,
-              ),
-              child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    product.brand.isNotEmpty
-                        ? product.brand
-                        : product.category,
-                    maxLines: 1,
-                    overflow:
-                        TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: Color(0xFF8B8798),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    product.title,
-                    maxLines: 2,
-                    overflow:
-                        TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      height: 1.2,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 7),
-                  Row(
+    return BlocBuilder<WishlistBloc, WishlistState>(
+      buildWhen: (previous, current) =>
+          previous.contains(product.id) !=
+          current.contains(product.id),
+      builder: (context, wishlistState) {
+        final isWishlisted =
+            wishlistState.contains(product.id);
+
+        return Card(
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () {
+              context.push(
+                '/products/${product.id}',
+              );
+            },
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Stack(
                     children: [
-                      const Icon(
-                        Icons.star_rounded,
-                        size: 15,
-                        color: Color(0xFFFFB020),
-                      ),
-                      const SizedBox(width: 3),
-                      Text(
-                        product.rating
-                            .toStringAsFixed(1),
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight:
-                              FontWeight.w600,
+                      Container(
+                        width: double.infinity,
+                        color: const Color(0xFFF5F3FA),
+                        child: Image.network(
+                          product.thumbnail,
+                          fit: BoxFit.cover,
+                          errorBuilder:
+                              (context, error, stackTrace) {
+                            return const Center(
+                              child: Icon(
+                                Icons
+                                    .image_not_supported_outlined,
+                                color: Colors.grey,
+                              ),
+                            );
+                          },
                         ),
                       ),
-                      const Spacer(),
-                      Text(
-                        '${product.stock} left',
-                        style: const TextStyle(
-                          fontSize: 9,
-                          color:
-                              Color(0xFF4CAF50),
-                          fontWeight:
-                              FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 7),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '\$${discountedPrice.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight:
-                                FontWeight.w800,
+                      if (product.discountPercentage > 0)
+                        Positioned(
+                          top: 10,
+                          left: 10,
+                          child: Container(
+                            padding:
+                                const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color:
+                                  const Color(0xFFFF5C7A),
+                              borderRadius:
+                                  BorderRadius.circular(9),
+                            ),
+                            child: Text(
+                              '${product.discountPercentage.toStringAsFixed(0)}% OFF',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight:
+                                    FontWeight.w800,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                      if (product
-                              .discountPercentage >
-                          0)
-                        Text(
-                          '\$${product.price.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                            fontSize: 10,
-                            color: Colors.grey,
-                            decoration:
-                                TextDecoration
-                                    .lineThrough,
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 9),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 34,
-                    child: ElevatedButton.icon(
-                      onPressed: product.stock <= 0
-                          ? null
-                          : () {
+                      Positioned(
+                        top: 9,
+                        right: 9,
+                        child: Material(
+                          color: Colors.white,
+                          shape: const CircleBorder(),
+                          child: InkWell(
+                            onTap: () {
                               context
-                                  .read<CartBloc>()
+                                  .read<WishlistBloc>()
                                   .add(
-                                    AddToCart(
-                                      CartItem(
-                                        product:
-                                            product,
-                                        quantity: 1,
-                                      ),
+                                    ToggleWishlist(
+                                      product,
                                     ),
                                   );
-
-                              ScaffoldMessenger.of(
-                                context,
-                              )
-                                ..hideCurrentSnackBar()
-                                ..showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      '${product.title} added to cart',
-                                    ),
-                                    behavior:
-                                        SnackBarBehavior
-                                            .floating,
-                                    duration:
-                                        const Duration(
-                                      milliseconds: 1200,
-                                    ),
-                                  ),
-                                );
                             },
-                      icon: const Icon(
-                        Icons
-                            .shopping_bag_outlined,
-                        size: 15,
-                      ),
-                      label: Text(
-                        product.stock > 0
-                            ? 'Add to cart'
-                            : 'Out of stock',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight:
-                              FontWeight.w700,
-                        ),
-                      ),
-                      style:
-                          ElevatedButton.styleFrom(
-                        backgroundColor:
-                            const Color(
-                          0xFF7C4DFF,
-                        ),
-                        foregroundColor:
-                            Colors.white,
-                        elevation: 0,
-                        padding:
-                            const EdgeInsets
-                                .symmetric(
-                          horizontal: 8,
-                        ),
-                        shape:
-                            RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(
-                            11,
+                            customBorder:
+                                const CircleBorder(),
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.all(8),
+                              child: Icon(
+                                isWishlisted
+                                    ? Icons
+                                        .favorite_rounded
+                                    : Icons
+                                        .favorite_border_rounded,
+                                size: 17,
+                                color: isWishlisted
+                                    ? const Color(
+                                        0xFFFF5C7A,
+                                      )
+                                    : const Color(
+                                        0xFF29243D,
+                                      ),
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    12,
+                    10,
+                    12,
+                    12,
+                  ),
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        product.brand.isNotEmpty
+                            ? product.brand
+                            : product.category,
+                        maxLines: 1,
+                        overflow:
+                            TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: Color(0xFF8B8798),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        product.title,
+                        maxLines: 2,
+                        overflow:
+                            TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          height: 1.2,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 7),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.star_rounded,
+                            size: 15,
+                            color: Color(0xFFFFB020),
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            product.rating
+                                .toStringAsFixed(1),
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight:
+                                  FontWeight.w600,
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(
+                            '${product.stock} left',
+                            style: const TextStyle(
+                              fontSize: 9,
+                              color:
+                                  Color(0xFF4CAF50),
+                              fontWeight:
+                                  FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 7),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '\$${discountedPrice.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight:
+                                    FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          if (product
+                                  .discountPercentage >
+                              0)
+                            Text(
+                              '\$${product.price.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: Colors.grey,
+                                decoration:
+                                    TextDecoration
+                                        .lineThrough,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 9),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 34,
+                        child: ElevatedButton.icon(
+                          onPressed: product.stock <= 0
+                              ? null
+                              : () {
+                                  context
+                                      .read<CartBloc>()
+                                      .add(
+                                        AddToCart(
+                                          CartItem(
+                                            product:
+                                                product,
+                                            quantity: 1,
+                                          ),
+                                        ),
+                                      );
+
+                                  ScaffoldMessenger.of(
+                                    context,
+                                  )
+                                    ..hideCurrentSnackBar()
+                                    ..showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          '${product.title} added to cart',
+                                        ),
+                                        behavior:
+                                            SnackBarBehavior
+                                                .floating,
+                                        duration:
+                                            const Duration(
+                                          milliseconds:
+                                              1200,
+                                        ),
+                                      ),
+                                    );
+                                },
+                          icon: const Icon(
+                            Icons
+                                .shopping_bag_outlined,
+                            size: 15,
+                          ),
+                          label: Text(
+                            product.stock > 0
+                                ? 'Add to cart'
+                                : 'Out of stock',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight:
+                                  FontWeight.w700,
+                            ),
+                          ),
+                          style:
+                              ElevatedButton.styleFrom(
+                            backgroundColor:
+                                const Color(
+                              0xFF7C4DFF,
+                            ),
+                            foregroundColor:
+                                Colors.white,
+                            disabledBackgroundColor:
+                                Colors.grey.shade300,
+                            disabledForegroundColor:
+                                Colors.grey.shade600,
+                            elevation: 0,
+                            padding:
+                                const EdgeInsets
+                                    .symmetric(
+                              horizontal: 8,
+                            ),
+                            shape:
+                                RoundedRectangleBorder(
+                              borderRadius:
+                                  BorderRadius.circular(
+                                11,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

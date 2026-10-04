@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../features/auth/presentation/bloc/auth_bloc.dart';
 import '../features/products/presentation/bloc/cart_bloc.dart';
+import '../features/wishlist/bloc/wishlist_bloc.dart';
 import 'router/app_router.dart';
 
 class ShoplyApp extends StatelessWidget {
@@ -22,6 +23,9 @@ class ShoplyApp extends StatelessWidget {
         ),
         BlocProvider(
           create: (_) => CartBloc(),
+        ),
+        BlocProvider(
+          create: (_) => WishlistBloc(),
         ),
       ],
       child: MaterialApp.router(
